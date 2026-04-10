@@ -1,14 +1,13 @@
 # [Architecture Pattern/Concept]
 Tags:
 
-## What This Is and Why It Exists
+## The Rule
+Core principle, 2-3 lines
 
-## How It Looks in Practice
+## Applied
+How it manifests at each layer
 
-## Security Implications
-
-## What to Look For During an Engagement
-
-## Links
+## What to Look For
+During an engagement
 
 ## My Notes

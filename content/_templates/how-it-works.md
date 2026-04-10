@@ -1,18 +1,13 @@
 # [Feature/Concept Name]
 Tags:
 
-## The Problem This Solves
+## Core
+2-3 lines
 
-## How a Developer Implements This
+## Attack Surface
+Where security breaks (bullets)
 
-## Why Developers Choose Different Approaches
-
-## What the Code Actually Looks Like
-
-## Configuration and Defaults That Matter
-
-## Where Security Breaks
-
-## Auditing Checklist
+## Audit
+Checklist (bullets)
 
 ## My Notes

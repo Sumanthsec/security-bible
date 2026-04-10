@@ -43,84 +43,62 @@ vulnerability.md
 markdown# [Vulnerability Name]
 Tags:
 
-## Understand the Feature First
+## Core
+1-2 lines on the fundamental concept
 
-## Why It Exists (Root Cause)
+## Mindset
+> Forever-hooks
 
-## The Data Flow
+## Chains
+[[Links]] with one-line context
 
-## What the Developer Should Have Done
-
-## Exploitation
-
-## What the Vulnerable Code Looks Like
-
-## What the Fix Looks Like
-
-## Chains With
-
-## Key Q&A From This Session
-
-## Lab Work
-
-## Key Insights
-
-## Questions That Came Up
-
-## Links
+## Key Watchpoints
+Non-obvious things to never forget
 
 ## My Notes
 how-it-works.md
 markdown# [Feature/Concept Name]
 Tags:
 
-## The Problem This Solves
+## Core
+2-3 lines
 
-## How a Developer Implements This
+## Attack Surface
+Where security breaks (bullets)
 
-## Why Developers Choose Different Approaches
-
-## What the Code Actually Looks Like
-
-## Configuration and Defaults That Matter
-
-## Where Security Breaks
-
-## Auditing Checklist
+## Audit
+Checklist (bullets)
 
 ## My Notes
 auditing.md
 markdown# Auditing: [Component/Area]
 Tags:
 
-## Mindset Before Touching Anything
+## Approach
+How to think about finding this
 
-## Step 1: Map the Surface
+## What to Look For
+Key indicators organized by category
 
-## Step 2: Test Systematically
+## Red Flags
+Non-obvious signs
 
-## Developer Perspective: Why This Is Hard
-
-## Common Patterns in the Wild
-
-## Red Flags During Testing
-
-## Links
+## Chains
+Links
 
 ## My Notes
 architecture.md
 markdown# [Architecture Pattern/Concept]
 Tags:
 
-## What This Is and Why It Exists
+## The Rule
+Core principle, 2-3 lines
 
-## How It Looks in Practice
+## Applied
+How it manifests at each layer
 
-## Security Implications
-
-## What to Look For During an Engagement
-
-## Links
+## What to Look For
+During an engagement
 
 ## My Notes
 chain.md
@@ -131,9 +109,7 @@ Tags:
 
 ## Why Each Link Works
 
-## The Developer's Blind Spot
-
-## Detection and Prevention
+## Hardening
 
 ## Source
 

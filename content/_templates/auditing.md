@@ -1,18 +1,16 @@
 # Auditing: [Component/Area]
 Tags:
 
-## Mindset Before Touching Anything
+## Approach
+How to think about finding this
 
-## Step 1: Map the Surface
+## What to Look For
+Key indicators organized by category
 
-## Step 2: Test Systematically
+## Red Flags
+Non-obvious signs
 
-## Developer Perspective: Why This Is Hard
-
-## Common Patterns in the Wild
-
-## Red Flags During Testing
-
-## Links
+## Chains
+Links
 
 ## My Notes
