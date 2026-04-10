@@ -160,18 +160,9 @@ re-loads user, populates SecurityContextHolder
 
 ## How JWTs Actually Work
 
-A JWT is three base64-encoded parts joined by dots: `header.payload.signature`
+Three base64-encoded parts joined by dots: `header.payload.signature`. Header = algorithm (`HS512`). Payload = claims (`sub`, `iat`, `exp`). **Payload is base64, not encrypted** — anyone can decode and read it. Never put secrets in the payload.
 
-```
-eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJhbGljZSIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjoxNzAwMDg2NDAwfQ.signature
-└────── header ──────┘└─────────────────── payload ──────────────────┘└─ signature ─┘
-```
-
-**Header (decoded):** `{"alg": "HS512"}` — which algorithm signed it.
-
-**Payload (decoded):** `{"sub": "alice", "iat": 1700000000, "exp": 1700086400}` — who, when issued, when expires. **This is base64-encoded, not encrypted.** Anyone can decode it and read the contents. Never put secrets in a JWT payload.
-
-**Signature:** `HMAC-SHA512(base64(header) + "." + base64(payload), jwtSecret)` — a hash of the header and payload, salted with the server's secret. The server can recompute this and verify it matches. An attacker can't forge a valid signature without the secret.
+**Signature** = `HMAC-SHA512(header + "." + payload, jwtSecret)`. Server recomputes and compares. Can't forge without the secret.
 
 ### Why Forging Is Hard
 

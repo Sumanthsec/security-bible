@@ -23,31 +23,12 @@ The developer writes a handler function that:
 
 The lowest level. Developer writes SQL strings and sends them through a database driver:
 
-```python
-# Python — mysql-connector, psycopg2, sqlite3
-conn = mysql.connector.connect(host='db', database='store', user='app', password='secret')
-cursor = conn.cursor()
-cursor.execute("SELECT name, price FROM products WHERE id = %s", (product_id,))
-row = cursor.fetchone()
-```
-
 ```java
-// Java — JDBC
+// Java — JDBC (pattern is identical in Python/psycopg2, Node/pg, PHP/PDO)
 Connection conn = DriverManager.getConnection("jdbc:mysql://db/store", "app", "secret");
 PreparedStatement ps = conn.prepareStatement("SELECT name, price FROM products WHERE id = ?");
 ps.setInt(1, productId);
 ResultSet rs = ps.executeQuery();
-```
-
-```javascript
-// Node.js — mysql2, pg
-const [rows] = await pool.execute('SELECT name, price FROM products WHERE id = ?', [productId]);
-```
-
-```php
-// PHP — PDO
-$stmt = $pdo->prepare("SELECT name, price FROM products WHERE id = ?");
-$stmt->execute([$productId]);
 ```
 
 ### ORMs (Object-Relational Mappers)
@@ -55,39 +36,12 @@ $stmt->execute([$productId]);
 An abstraction layer that maps application objects to database tables. The developer works with objects instead of SQL — the ORM generates parameterized queries under the hood:
 
 ```python
-# Django ORM — define the mapping once
-class Product(models.Model):
-    name = models.CharField(max_length=200)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-
-# Query using Python, not SQL
+# Django ORM — maps objects to tables, generates parameterized queries under the hood
 product = Product.objects.get(id=product_id)      # Generates: SELECT ... WHERE id = ?
 results = Product.objects.filter(name__contains=q) # Generates: SELECT ... WHERE name LIKE ?
-print(product.name)   # Access as Python attribute
 ```
 
-```java
-// JPA/Hibernate
-@Entity
-public class Product {
-    @Id private Long id;
-    private String name;
-    private BigDecimal price;
-}
-
-Product p = entityManager.find(Product.class, productId);
-```
-
-```javascript
-// Sequelize (Node.js)
-const Product = sequelize.define('Product', {
-    name: DataTypes.STRING,
-    price: DataTypes.DECIMAL
-});
-const product = await Product.findByPk(productId);
-```
-
-**Why developers choose ORMs:** less boilerplate, database portability, automatic parameterization, object-oriented access. **Why they sometimes bypass them:** complex reporting queries, performance optimization, database-specific features. The bypass is done through raw SQL escape hatches (`.raw()`, `text()`, `knex.raw()`).
+**Why developers choose ORMs:** automatic parameterization, less boilerplate. **Why they bypass them:** complex queries, performance, DB-specific features. The bypass = raw SQL escape hatches (`.raw()`, `.extra()`, `text()`, `knex.raw()`) — and that's where SQLi lives.
 
 ### Query builders
 

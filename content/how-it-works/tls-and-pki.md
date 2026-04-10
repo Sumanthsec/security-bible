@@ -88,92 +88,15 @@ Browser                                         Server
 
 **SNI (Server Name Indication):** The browser sends the hostname in plaintext in the ClientHello. This is necessary because one IP can host hundreds of sites — the server needs to know which certificate to present. Even with HTTPS, anyone on the network can see which **domain** you're connecting to (via SNI and [[DNS]]). They can't see the URL path, headers, or body.
 
-## Key Exchange — ECDHE (Elliptic Curve Diffie-Hellman Ephemeral)
+## Key Exchange — ECDHE and Forward Secrecy
 
-### The Problem
+Both sides exchange ephemeral public keys (ECDHE). Each computes the same shared secret from the other's public key + their own private key. The math is one-way — an observer who sees both public keys can't derive the secret.
 
-Both sides need to agree on an encryption key. But the conversation itself isn't private — an attacker could be watching. How do you create a shared secret when the channel is public?
+**The "Ephemeral" part — Forward Secrecy:** The **E** in ECDHE means new random keys for every session, deleted from memory afterward.
 
-### How It Works
+**Why this matters:** Old RSA key exchange used the server's long-lived private key for every session. "Record now, decrypt later" — steal the key years later and unlock all past traffic. ECDHE makes past traffic permanently unrecoverable even if the server's signing key leaks later. TLS 1.3 (2018) made ECDHE mandatory and removed RSA key exchange entirely.
 
-```
-Public parameter: an agreed elliptic curve (e.g., X25519) with a base point G
-
-Browser:
-  1. Generate random private key: a (256 bits)
-  2. Compute public key: A = a × G (point multiplication on the curve)
-  3. Send A in ClientHello
-
-Server:
-  1. Generate random private key: b (256 bits)
-  2. Compute public key: B = b × G
-  3. Send B in ServerHello
-
-Both compute the shared secret:
-  Browser: secret = a × B = a × (b × G) = (ab) × G
-  Server:  secret = b × A = b × (a × G) = (ab) × G
-           ↑ SAME VALUE
-
-Attacker sees: G, A, B (all public)
-Needs to find: a from A = a × G → elliptic curve discrete log problem → infeasible
-```
-
-Computing `A = a × G` (point multiplication) is fast. Reversing it — finding `a` from `A` and `G` — is computationally infeasible. Same one-way property as regular Diffie-Hellman but with much smaller keys (256-bit ECC ≈ 3072-bit RSA security).
-
-### The "Ephemeral" Part — Forward Secrecy
-
-The **E** in ECDHE means new random keys for **every single session**. After the session ends, the private values `a` and `b` are deleted from memory. They exist nowhere.
-
-This is why ECDHE was created — to fix a critical problem with the old approach:
-
-**Old way (RSA key exchange, used from 1995-2018):**
-```
-Browser encrypts pre-master secret with server's RSA public key
-Server decrypts with its long-lived RSA private key
-Same RSA private key used for EVERY session, for months or years
-```
-
-**The fatal flaw:**
-```
-Year 1: Attacker records all encrypted traffic (can't read it yet)
-Year 2: Attacker steals the server's RSA private key (breach, Heartbleed, court order)
-Now:    Attacker decrypts EVERY recorded pre-master secret from Year 1
-        Derives all session keys, decrypts ALL past traffic retroactively
-```
-
-One key compromise unlocked all past sessions. Intelligence agencies recorded bulk encrypted traffic betting they could get keys later ("record now, decrypt later").
-
-**ECDHE fix:**
-```
-Year 1: Each session uses unique random ephemeral keys (a, b)
-        Keys deleted after each session
-Year 2: Attacker steals server's RSA private key
-Now:    RSA key was only used for SIGNATURES (proving identity)
-        Never used for key exchange
-        Ephemeral keys a, b no longer exist — nowhere on disk, nowhere in memory
-        Past traffic CANNOT be decrypted. Ever.
-```
-
-TLS 1.3 (2018) removed RSA key exchange entirely. Only ECDHE is allowed. Forward secrecy is mandatory.
-
-### From Shared Secret to Encryption Keys
-
-The DH shared secret goes through a key derivation function to produce separate keys:
-
-```
-Shared secret (from ECDHE)
-    ↓
-HKDF (key derivation function)
-    ↓
-    ├── Client write key    (browser → server encryption)
-    ├── Server write key    (server → browser encryption)
-    ├── Client IV           (nonce for client's encryption)
-    └── Server IV           (nonce for server's encryption)
-```
-
-Separate keys per direction — a message encrypted for one direction can't be decrypted as the other. IVs ensure encrypting the same data twice produces different ciphertext.
-
-All HTTP traffic is then encrypted with AES-256-GCM. The GCM authentication tag provides integrity — if anyone modifies the ciphertext in transit, decryption fails.
+The shared secret → HKDF → separate keys per direction (client write key, server write key, IVs). All traffic encrypted with AES-256-GCM.
 
 ## PKI — How Certificates Work
 
