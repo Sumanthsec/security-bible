@@ -39,6 +39,21 @@ PHP: `mysqli_query(`, `mysql_query(`, `->query(`, `->exec(`
 - User-controlled operators in search builders
 - `IN (...)` clauses built dynamically
 
+## Log Observation
+
+When you have access to query logs (white-box, lab, or post-compromise), tail them while sending requests. The log shows exactly what SQL the parser received — it's ground truth.
+
+`$1` / `?` / `@p1` in the log = parameterized = safe. Your input appearing as a quoted literal = concatenated = investigate. Your input appearing cleaned or modified = sanitization layer, dig deeper.
+
+| Database | Enable log | Parameterized marker |
+|---|---|---|
+| PostgreSQL | `log_statement = 'all'` | `$1` |
+| MySQL | `SET GLOBAL general_log = 'ON'` | `?` |
+| MSSQL | SQL Profiler / Extended Events | `@p1` |
+| Oracle | `AUDIT` policies / trace 10046 | `:1` |
+
+The loop: read source → find candidate sink → send request with marker input → check log → confirm parameterized or concatenated → if concatenated, send single quote → watch for syntax error in log → build payload.
+
 ## Black-Box
 
 **DB identification first** — sleep functions determine which DB you're talking to. Syntax differs for everything after this.
@@ -85,7 +100,6 @@ Before defaulting to bisection (~7 req/char), check: does the page have any outp
 ## Chains
 
 - [[SQL Injection]] — main vulnerability reference
-- [[Fixing SQLi]] — parameterization, ORMs, PoLP
 - [[Database Queries]] — how apps build queries
 
 ## My Notes

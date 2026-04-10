@@ -5,13 +5,13 @@ Tags: #vulnerability #injection #database #day1 #day4
 
 SQLi is a parser confusion problem — input concatenated into a SQL string becomes code because the parser can't distinguish data from structure. Every flavor, every bypass, every escalation traces back to this: code and data sharing one channel before the parser sees them.
 
-Sanitization is fundamentally a losing strategy. You're writing your own SQL parser to defeat the real one — and the real one is more complex than you think (CVE-2006-2753: GBK multibyte ate the backslash, nested keyword stripping that recreates the keyword, MySQL version comments). The fix is [[Fixing SQLi|parameterized queries]], which operate at the protocol level.
+Sanitization is fundamentally a losing strategy — you're writing your own SQL parser to defeat the real one. Multibyte encodings break escaping (CVE-2006-2753: in GBK, the second byte of a two-byte character can be a backslash, so `\'` becomes a valid character followed by an unescaped quote). Keyword stripping backfires (`UNUNIONION` → strip `UNION` → `UNION`). MySQL version comments (`/*!50000UNION*/`) hide keywords from filters but the parser still executes them. The fix is parameterized queries, which operate at the protocol level.
 
 OWASP A03:2021 (Injection). Still top 3 after 20+ years.
 
 ## Flavors
 
-Same concatenation bug, different output channel. The page's loudness determines the flavor you get.
+Same concatenation bug, different output channel. How much information the page returns determines which flavor you get.
 
 | Flavor | Channel | Bandwidth | When |
 |---|---|---|---|
@@ -52,7 +52,7 @@ If errors aren't visible, check for a debug gate: [[Client-Controlled IP Headers
 
 **Side-channel / precomputation.** Standard blind bisection takes ~7 requests per character. Instead: if the page has any output with a numeric axis you can index into, encode the secret byte into that index. One request per full byte instead of 7. Think of it as a spy hotel — the secret picks which room to check into, you just read the guest list. Any output with >2 possible values and a controllable index is a multi-bit channel.
 
-Aggregation is orthogonal — it's horizontal (all rows in one response). Precomputation is vertical (full byte per request). Different problems, combinable.
+Aggregation solves a different problem — it's horizontal (all rows in one response). Precomputation is vertical (full byte per request). Combine both when possible.
 
 **Aggregation — per-DB functions:**
 
@@ -138,7 +138,7 @@ LEVEL 5  ─ Interactive shell  (reverse shell → privesc)
 
 ## Why SQLi Still Exists
 
-[[Fixing SQLi|Parameterized queries]] solve the parsing confusion — PREPARE sends structure, EXECUTE sends data as binary, parser is done before data arrives. But you can't parameterize SQL structure: table names, column names, ORDER BY direction, operators. These need allowlisting.
+Parameterized queries solve the parsing confusion at the wire level. `COM_STMT_PREPARE` sends the query structure, `COM_STMT_EXECUTE` sends data as typed binary in a separate message — the parser is done before data arrives. This isn't escaping (which still sends one string and hopes the parser handles it). It's complete channel separation. But you can't parameterize SQL structure — table names, column names, ORDER BY direction, operators. These need allowlisting against a hardcoded set of valid values.
 
 ORMs prevent SQLi by generating parameterized queries — until developers reach for `.raw()`, `.extra()`, `text()`, `createNativeQuery()`, `knex.raw()`. These escape hatches are where SQLi lives in modern codebases.
 
