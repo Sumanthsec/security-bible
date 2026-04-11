@@ -48,7 +48,7 @@ Determines everything downstream — syntax, system tables, aggregation function
 | MSSQL | `CONVERT(int, (SELECT secret))` | Conversion error |
 | Oracle | `UTL_INADDR.GET_HOST_NAME((SELECT secret FROM dual))` | Hostname lookup error |
 
-If errors aren't visible, check for a debug gate: [[Client-Controlled IP Headers]] + [[Debug Mode Disclosure]].
+If errors aren't visible, check for a debug gate (trusted IP headers that flip debug mode, stack traces that leak DB errors).
 
 **Side-channel / precomputation.** Standard blind bisection takes ~7 requests per character. Instead: if the page has any output with a numeric axis you can index into, encode the secret byte into that index. One request per full byte instead of 7. Think of it as a spy hotel — the secret picks which room to check into, you just read the guest list. Any output with >2 possible values and a controllable index is a multi-bit channel.
 
@@ -135,7 +135,7 @@ LEVEL 5  ─ Interactive shell  (reverse shell → privesc)
 
 **Key primitives:** PostgreSQL `COPY FROM PROGRAM` (CVE-2019-9193, closed as "this is a feature"), MSSQL `xp_cmdshell`, MySQL `LOAD_FILE`/`INTO OUTFILE`/UDF, Oracle `DBMS_SCHEDULER`. PostgreSQL large objects (`lo_import`/`lo_export`) write arbitrary binary — including compiled `.so` for C extensions.
 
-**PoLP determines blast radius.** The same SQLi bug is a P3 info-leak or a P0 RCE depending entirely on the DB role's privileges. The escalation is gated on `is_superuser`, not on the injection itself. See [[Principle of Least Privilege]].
+**PoLP determines blast radius.** The same SQLi bug is a P3 info-leak or a P0 RCE depending entirely on the DB role's privileges. The escalation is gated on `is_superuser`, not on the injection itself.
 
 ## Why SQLi Still Exists
 
@@ -196,12 +196,5 @@ Before defaulting to bisection (~7 req/char), check: does the page have any outp
 **Front door locked, try side door** — `/login` is the most audited endpoint. `/forgot-password`, `/signup`, `/reset`, `/api/v1/*` are where bugs live.
 
 **Multi-finding density** — one 40-line controller function can have 6 findings. Read the whole function, map the whole graph. Don't stop at the SQLi.
-
-## Chains
-
-- [[Client-Controlled IP Headers]] — spoof header to flip debug gate, upgrade blind → error-based
-- [[Debug Mode Disclosure]] — debug catch blocks turn DB errors into your output channel
-- [[Database as a Process]] — why every SQLi against a superuser connection becomes RCE
-- [[Principle of Least Privilege]] — the only thing that contains blast radius at every level
 
 ## My Notes
