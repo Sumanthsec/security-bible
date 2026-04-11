@@ -75,7 +75,7 @@ Content-Security-Policy: default-src 'self'
 | `X-Frame-Options` | Prevent framing | Mitigates [[Clickjacking]] |
 | `X-Content-Type-Options: nosniff` | Prevent MIME sniffing | Prevents type confusion |
 | `Referrer-Policy` | Control Referer header | Prevents URL leakage |
-| `Set-Cookie` flags | Cookie security | See [[Cookies and Sessions]] |
+| `Set-Cookie` flags | Cookie security | HttpOnly, Secure, SameSite |
 
 ## Attack Surface
 

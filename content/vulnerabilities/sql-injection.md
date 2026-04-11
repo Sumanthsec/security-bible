@@ -3,9 +3,9 @@ Tags: #vulnerability #injection #database #day1 #day4
 
 ## What Is SQLi
 
-SQLi is a parser confusion problem — input concatenated into a SQL string becomes code because the parser can't distinguish data from structure. Every flavor, every bypass, every escalation traces back to this: code and data sharing one channel before the parser sees them.
+When user input is concatenated into a SQL query string instead of bound as a parameter, the database parser executes the input as SQL. The attacker controls the query structure.
 
-Sanitization is fundamentally a losing strategy — you're writing your own SQL parser to defeat the real one. Multibyte encodings break escaping (CVE-2006-2753: in GBK, the second byte of a two-byte character can be a backslash, so `\'` becomes a valid character followed by an unescaped quote). Keyword stripping backfires (`UNUNIONION` → strip `UNION` → `UNION`). MySQL version comments (`/*!50000UNION*/`) hide keywords from filters but the parser still executes them. The fix is parameterized queries, which operate at the protocol level.
+Sanitization is a losing strategy — you're writing your own SQL parser to defeat the real one. Multibyte encodings break escaping (CVE-2006-2753: in GBK, the second byte of a two-byte character can be a backslash, so `\'` becomes a valid character followed by an unescaped quote). Keyword stripping backfires (`UNUNIONION` → strip `UNION` → `UNION`). MySQL version comments (`/*!50000UNION*/`) hide keywords from filters but the parser still executes them. The fix is parameterized queries, which operate at the protocol level.
 
 OWASP A03:2021 (Injection). Still top 3 after 20+ years.
 
@@ -105,6 +105,7 @@ A filter is a list of specific things the developer thought to block. Everything
 | Quotes (MSSQL) | `CHAR(97)+CHAR(100)+...` |
 | Quotes (Oracle) | `q'[admin]'` or `CHR(97)\|\|CHR(100)\|\|...` |
 | Keywords | Case mixing, `UN/**/ION`, `/*!50000UNION*/` |
+| Double-encoding | `%2527` → `%27` → `'` (when filter runs before URL decoding) |
 
 **WAF parser mismatch:** WAFs parse HTTP, databases parse SQL. These are different parsers with different grammars — the gap between them is where bypasses live.
 
@@ -147,6 +148,54 @@ ORMs prevent SQLi by generating parameterized queries — until developers reach
 **Real breaches** — Sony 2011 (plaintext passwords leaked), Heartland 2008 (130M payment cards), TalkTalk 2015 (teenager with sqlmap), MOVEit 2023 (Cl0p mass exploitation via SQLi in file transfer app). Same fundamental bug, 15 years apart.
 
 Default installs ship superuser credentials in the app connection string. The fix isn't better sanitization — it's PoLP at the DB layer. If this credential leaked tomorrow, what could the attacker do?
+
+## Finding SQLi
+
+### Log Observation
+
+When you have access to query logs (white-box, lab, or post-compromise), tail them while sending requests. The log shows exactly what SQL the parser received — it's ground truth.
+
+`$1` / `?` / `@p1` in the log = parameterized = safe. Your input appearing as a quoted literal = concatenated = investigate. Your input appearing cleaned or modified = sanitization layer, dig deeper.
+
+| Database | Enable log | Parameterized marker |
+|---|---|---|
+| PostgreSQL | `log_statement = 'all'` | `$1` |
+| MySQL | `SET GLOBAL general_log = 'ON'` | `?` |
+| MSSQL | SQL Profiler / Extended Events | `@p1` |
+| Oracle | `AUDIT` policies / trace 10046 | `:1` |
+
+The loop: read source → find candidate sink → send request with marker input → check log → confirm parameterized or concatenated → if concatenated, send single quote → watch for syntax error in log → build payload.
+
+### Black-Box
+
+**DB identification first** — sleep functions determine which DB you're talking to. Syntax differs for everything after this.
+
+**Technique determination — always pick the highest-bandwidth channel:**
+
+1. UNION SELECT with NULLs — see output? → UNION-based
+2. Inject syntax error — see DB error? → Error-based
+3. `AND 1=1` vs `AND 1=2` — page differs? → Boolean-blind
+4. `AND SLEEP(5)` — timing differs? → Time-blind
+5. DNS/HTTP callback — received? → OOB
+
+Before defaulting to bisection (~7 req/char), check: does the page have any output with >2 possible values and a controllable index? That's a multi-bit side channel — one request per byte.
+
+### Red Flags
+
+- Single quote `'` causes 500 error or different behavior
+- DB error messages visible on page
+- Different HTTP status for valid vs invalid query logic
+- `ORDER BY 1` works but `ORDER BY 100` errors
+- WAF blocks `UNION SELECT` but not `/*!50000UNION*//*!50000SELECT*/`
+- Homemade regex or blacklist in front of query
+- `matches()` in Java filter code
+- Filters running before URL decoding (double-encoding opportunity)
+- Page renders rows by ID or result counts alongside a controllable query (side-channel)
+- `+` in a Java SQL string — primary code review red flag for concatenation
+
+**Front door locked, try side door** — `/login` is the most audited endpoint. `/forgot-password`, `/signup`, `/reset`, `/api/v1/*` are where bugs live.
+
+**Multi-finding density** — one 40-line controller function can have 6 findings. Read the whole function, map the whole graph. Don't stop at the SQLi.
 
 ## Chains
 

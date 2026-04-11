@@ -51,7 +51,7 @@ When you see `JdbcTemplate` → expect SQLi opportunities. When you see `JpaRepo
 - **`JdbcTemplate` + string concatenation** → [[SQL Injection]]
 - **`@RequestParam` into file paths** → path traversal
 - **`@RequestParam` into shell commands** → command injection
-- **JWT secret hardcoded in `application.properties`** → token forgery ([[Authentication and JWT]])
+- **JWT secret hardcoded in `application.properties`** → token forgery
 - **`@PreAuthorize` missing** → broken access control
 - **CSRF protection disabled** in `WebSecurityConfig` → [[CSRF]]
 - **Verbose error pages** in dev profile leaked to prod → info disclosure
