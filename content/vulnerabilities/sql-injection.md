@@ -78,7 +78,7 @@ Error messages, version queries, and syntax differences also reveal the DB type.
 | Oracle | `SELECT column_name FROM ALL_TAB_COLUMNS WHERE table_name = '...'` |
 | SQLite | `PRAGMA table_info('...')` |
 
-**3. Extract** — pull values using whichever flavor is available. For UNION, you need matching column count — enumerate with `ORDER BY 1`, `ORDER BY 2`, etc. until it errors, or `UNION SELECT NULL, NULL, NULL...` increasing NULLs until it works.
+**3. Extract** — pull values using whichever flavor is available. For UNION, both SELECTs must return the same number of columns — UNION combines two result sets into one, so the structure has to match or the DB throws an error. Enumerate the column count with `ORDER BY 1`, `ORDER BY 2`, etc. until it errors, or `UNION SELECT NULL, NULL, NULL...` increasing NULLs until it works.
 
 **Error-based extraction** — databases include your data in error messages meant for debugging:
 
