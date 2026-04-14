@@ -174,6 +174,52 @@ Common CSP mistakes: `script-src 'unsafe-inline'` (allows all inline scripts, us
 
 **DOM-based fix** — use safe sinks. `textContent` instead of `innerHTML` (treats everything as plain text). If HTML is needed, sanitize with DOMPurify. Never pass user input to `eval()`, `setTimeout(string)`, `document.write()`.
 
+## How does XSS chain with other vulnerabilities?
+
+**XSS kills CSRF protections.** CSRF tokens work because `evil.com` can't read pages from `bank.com` — same-origin policy blocks it. But XSS runs on `bank.com`. The attacker's JavaScript can `fetch('/transfer')`, read the response, extract the CSRF token from the HTML, and submit the form with the correct token. All in the victim's browser, same origin, with the victim's session. CSRF tokens, SameSite cookies, CORS — all irrelevant because the attacker is already inside the trusted origin. This is why XSS is considered more severe than CSRF.
+
+**XSS → Account takeover without stealing cookies.** HttpOnly blocks cookie theft. But XSS can call `/api/settings/change-email` with the victim's session, change their email to the attacker's, then trigger a password reset. Account taken over without ever touching the cookie.
+
+**XSS → IDOR exploitation.** App has IDOR but uses unpredictable UUIDs. XSS on a shared page steals other users' UUIDs from the DOM, then exploits the IDOR with valid identifiers.
+
+**XSS → Internal network access.** If the victim is on a corporate network, XSS can make the victim's browser send requests to internal services: `fetch('http://192.168.1.1/admin')`. The attacker reads internal pages through the victim's browser — like SSRF but through the client instead of the server.
+
+**Self-XSS + CSRF** — covered above. Useless self-XSS becomes exploitable when CSRF delivers the payload into the victim's own session.
+
+The pattern: XSS is the universal enabler. It bypasses client-side protections, escalates access, and turns otherwise-unexploitable bugs into full chains.
+
+## How do you test for XSS?
+
+**1. Map every input-output pair.** Before injecting anything, trace where data goes in and where it comes back out. Every form field, URL parameter, header, cookie value, file upload. Use Burp's spider and manual browsing to build this map.
+
+**2. Determine the context.** For each place your input appears in the response, check the raw HTML source. Is it in the HTML body, an attribute, a JavaScript string, a URL, CSS? This determines which payload you need. Don't blindly spray `<script>alert(1)</script>` — it only works in HTML body context.
+
+**3. Test with a canary first.** Submit a unique harmless string with special characters: `xss123test<>"'/`. Check the response — which characters survived? If `<>` are encoded but `"'` aren't, tag injection is blocked but attribute breakout might work. Saves time over guessing payloads.
+
+**4. Test per context:**
+- HTML body — `<img src=x onerror=alert(1)>` — if `<script>` is filtered, try event handlers on other tags
+- Attribute — `" onfocus="alert(1)" autofocus="` — break out of the attribute
+- JavaScript string — `'; alert(1); //` — break out of the string
+- URL/href — `javascript:alert(1)` — no special characters needed
+- Inside `<script>` block — `</script><script>alert(1)</script>` — close the existing script tag first
+
+**5. Test filter bypasses if basic payloads are blocked:**
+- Case variation: `<ScRiPt>`, `<IMG SRC=x oNeRrOr=alert(1)>`
+- Encoding: HTML entities `&#60;`, URL encoding `%3C`, double encoding
+- Tag alternatives: `<svg onload=alert(1)>`, `<details open ontoggle=alert(1)>`
+- No parentheses: `` alert`1` `` using template literals
+- No quotes/spaces: `<img/src=x/onerror=alert(1)>`
+
+**6. Test stored XSS separately.** Submit payloads in every persistent input — profile fields, comments, messages, file names, settings. Browse to every page where that data might render. Check your own view AND consider: where else might this data appear? Admin panels, email notifications, PDF exports, API responses?
+
+**7. Test DOM-based XSS.** View page source — look for JavaScript that reads from `location.hash`, `location.search`, `document.referrer`, `window.name`, `postMessage`. Trace where that data flows. If it hits `innerHTML`, `document.write`, `eval`, or `setTimeout(string)`, craft your payload for that source.
+
+**8. Deploy blind XSS payloads.** In every input that might be viewed by someone else — support tickets, feedback forms, contact forms, User-Agent header, Referer header — inject your XSS Hunter payload. Then wait.
+
+**9. Test file uploads.** Upload SVG with embedded scripts, HTML files. Check how they're served back — same origin? Correct content type? `Content-Disposition` header?
+
+Key mindset: a failed `<script>alert(1)</script>` doesn't mean there's no XSS — it means you need a different payload for that context.
+
 ## Why is XSS so hard to eliminate?
 
 Output encoding has to be correct in every single place user data is rendered. One missed field in a large app — vulnerable. CSP is hard to deploy without breaking functionality (inline scripts, third-party analytics, legacy code). DOM-based XSS keeps growing as apps become more JavaScript-heavy. Context switching between HTML, JavaScript, URLs, and CSS is error-prone. Frameworks help with safe defaults but developers use the escape hatches.
