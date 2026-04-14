@@ -7,9 +7,10 @@
 | 1 | 2026-04-05 | SQL Injection | vulnerabilities/sql-injection.md |
 | 2 | 2026-04-05 | Web App Fundamentals | how-it-works/dns.md, how-it-works/tls-and-pki.md |
 | 5 | 2026-04-12 | SSRF, IDOR | vulnerabilities/ssrf.md, vulnerabilities/idor.md |
+| 5 | 2026-04-13 | Authentication Flaws | vulnerabilities/authentication-flaws.md |
 
 ## Stats
-- Vulnerabilities: 3
+- Vulnerabilities: 4
 - How-it-works: 2
 - Auditing guides: 0
 - Architecture: 0
