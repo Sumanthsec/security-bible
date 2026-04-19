@@ -71,7 +71,7 @@ Browser                                         Server
    |--- ClientHello ----------------------------→  |
    |    Supported versions, cipher suites          |
    |    Key share (X25519 public value)            |
-   |    SNI: tractive.com (plaintext!)             |
+   |    SNI: bulmax.com (plaintext!)             |
    |                                               |
    |←-- ServerHello ----------------------------   |
    |    Chosen cipher, Key share                   |

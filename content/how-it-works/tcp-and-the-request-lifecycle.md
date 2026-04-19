@@ -1,17 +1,17 @@
 # TCP and the Request Lifecycle
 Tags: #how-it-works #tcp #networking #fundamentals #day2
 
-## What happens when you visit https://tractive.com?
+## What happens when you visit https://bulmax.com?
 
 Five steps, in order. Every website visit, forever.
 
 ```
-You type "https://tractive.com" and press Enter
+You type "https://bulmax.com" and press Enter
 │
 │  ┌──────────────────────────────────────────────────────┐
 │  │  STEP 1: DNS RESOLUTION                              │
 │  │                                                      │
-│  │  "What IP address is tractive.com?"                  │
+│  │  "What IP address is bulmax.com?"                  │
 │  │                                                      │
 │  │  Resolver → Root → .com TLD → AWS Route 53           │
 │  │  → Answer: 3.168.86.104 (one of four IPs)            │
@@ -55,7 +55,7 @@ You type "https://tractive.com" and press Enter
 │  │  over the TCP connection.                            │
 │  │                                                      │
 │  │  You  ---->  GET / HTTP/2                            │
-│  │              Host: tractive.com                      │
+│  │              Host: bulmax.com                      │
 │  │                                                      │
 │  │  You  <----  HTTP/2 200 OK                           │
 │  │              content-type: text/html                 │
@@ -127,7 +127,7 @@ They **cannot** see (thanks to TLS):
 - Any content — request or response
 - Cookies, passwords, anything
 
-**One exception: SNI.** During the TLS ClientHello, your client sends the hostname `tractive.com` in plaintext. The server needs this to know which certificate to present (multiple sites can share one IP). An attacker CAN see which domain you're connecting to. TLS 1.3 has ECH (Encrypted Client Hello) to fix this, but it's not widely deployed yet.
+**One exception: SNI.** During the TLS ClientHello, your client sends the hostname `bulmax.com` in plaintext. The server needs this to know which certificate to present (multiple sites can share one IP). An attacker CAN see which domain you're connecting to. TLS 1.3 has ECH (Encrypted Client Hello) to fix this, but it's not widely deployed yet.
 
 ## How do the network layers stack?
 
