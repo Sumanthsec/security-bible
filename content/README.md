@@ -10,9 +10,10 @@
 | 5 | 2026-04-13 | Authentication Flaws | vulnerabilities/authentication-flaws.md |
 | 5 | 2026-04-14 | XSS | vulnerabilities/xss.md |
 | 5 | 2026-04-14 | SOP & CORS | how-it-works/sop-and-cors.md |
+| 5 | 2026-04-20 | SSTI | vulnerabilities/ssti.md |
 
 ## Stats
-- Vulnerabilities: 5
+- Vulnerabilities: 6
 - How-it-works: 4
 - Auditing guides: 0
 - Architecture: 0
