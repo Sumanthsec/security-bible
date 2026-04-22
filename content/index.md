@@ -31,9 +31,10 @@ A personal offensive security knowledge base.
 | 5 | 2026-04-21 | HTTP Request Smuggling | vulnerabilities/http-request-smuggling.md |
 | 5 | 2026-04-22 | Command Injection | vulnerabilities/command-injection.md |
 | 5 | 2026-04-22 | Path Traversal / LFI / RFI | vulnerabilities/path-traversal-lfi-rfi.md |
+| 5 | 2026-04-22 | XXE | vulnerabilities/xxe.md |
 
 ## Stats
-- Vulnerabilities: 9
+- Vulnerabilities: 10
 - How-it-works: 4
 - Auditing guides: 0
 - Architecture: 0
