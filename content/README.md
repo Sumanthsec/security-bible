@@ -11,9 +11,12 @@
 | 5 | 2026-04-14 | XSS | vulnerabilities/xss.md |
 | 5 | 2026-04-14 | SOP & CORS | how-it-works/sop-and-cors.md |
 | 5 | 2026-04-20 | SSTI | vulnerabilities/ssti.md |
+| 5 | 2026-04-21 | HTTP Request Smuggling | vulnerabilities/http-request-smuggling.md |
+| 5 | 2026-04-22 | Command Injection | vulnerabilities/command-injection.md |
+| 5 | 2026-04-22 | Path Traversal / LFI / RFI | vulnerabilities/path-traversal-lfi-rfi.md |
 
 ## Stats
-- Vulnerabilities: 6
+- Vulnerabilities: 9
 - How-it-works: 4
 - Auditing guides: 0
 - Architecture: 0
