@@ -10,7 +10,7 @@ Tags:
 Two policies define a role:
 
 - **Permissions policy** — what the role can do (its max permissions).
-- **Trust policy** — who or what may assume it (e.g. IAM user `rmogull`, or a service like CloudTrail).
+- **Trust policy** — who or what may assume it (e.g. IAM user `bulmax`, or a service like CloudTrail).
 
 **Using it:** you need permission to assume the role, and assuming is a deliberate API call → starts a **session** → **temporary credentials** valid only for that session. Switch roles on the fly as the task changes.
 
