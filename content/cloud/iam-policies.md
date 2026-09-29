@@ -5,7 +5,7 @@ Tags:
 
 An IAM **permissions policy** = a list of actions, allowed or denied. Attach it to a user/role and it becomes an [[identity-fundamentals|entitlement]] — what that principal can do.
 
-**Identity-based policies** attach to a user, group, or role and grant/deny permissions. (Resource-based policies also exist — later.) Two subtypes:
+**Identity-based policies** attach to a user, group, or role and grant/deny permissions. (Also: [[resource-based-policies]] and [[service-control-policies]].) Two subtypes:
 
 - **Inline** — attached to one user/group/role, not reusable. Painful at scale.
 - **Managed** — written once, attach anywhere; edits apply instantly to everything using it.
